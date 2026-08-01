@@ -1,0 +1,12 @@
+/.bundle/
+/vendor/bundle
+/pkg/
+/tmp/
+/coverage/
+*.gem
+.DS_Store
+.env
+Gemfile.lock
+.tokens.json
+/docs/authorization_code_plan.md
+/docs/openapi/*.json

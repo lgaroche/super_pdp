@@ -1,0 +1,46 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+
+# Load .env if present (dotenv is a dev dependency).
+begin
+  require "dotenv"
+  Dotenv.load(File.expand_path("../.env", __dir__))
+rescue LoadError
+  warn "[console] dotenv not installed; relying on the current environment"
+end
+
+require "super_pdp"
+require "pry"
+
+# Default configuration targets the primary company (Burger Queen).
+SuperPdp.configure do |c|
+  c.client_id     = ENV["SUPER_PDP_CLIENT_ID"]
+  c.client_secret = ENV["SUPER_PDP_CLIENT_SECRET"]
+  c.environment   = (ENV["SUPER_PDP_ENV"] || "sandbox").to_sym
+end
+
+# Convenience helpers available inside the console session.
+def bq
+  SuperPdp::Client.new
+end
+
+def tricatel
+  id = ENV["SUPER_PDP_TRICATEL_CLIENT_ID"]
+  secret = ENV["SUPER_PDP_TRICATEL_CLIENT_SECRET"]
+  if id.to_s.empty? || secret.to_s.empty?
+    warn "[console] Tricatel credentials are not set in .env"
+    return nil
+  end
+  SuperPdp::Client.new(client_id: id, client_secret: secret, environment: :sandbox)
+end
+
+puts <<~BANNER
+  super_pdp console
+    bq        -> client for the default company (#{ENV["SUPER_PDP_CLIENT_ID"] ? "configured" : "MISSING creds"})
+    tricatel  -> client for Tricatel (#{ENV["SUPER_PDP_TRICATEL_CLIENT_ID"].to_s.empty? ? "creds not set" : "configured"})
+  e.g. bq.sessions.me
+BANNER
+
+Pry.start

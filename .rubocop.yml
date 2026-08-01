@@ -1,0 +1,64 @@
+AllCops:
+  TargetRubyVersion: 3.1
+  NewCops: enable
+  SuggestExtensions: false
+  Exclude:
+    - "bin/**/*"        # sandbox/console scripts
+    - "docs/**/*"
+    - "vendor/**/*"
+
+# --- Match the project's established style -------------------------------------
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+# Keep the deliberate column-alignment aesthetic. The project aligns values *after*
+# the colon (keys left, values in a column), which doesn't match any HashAlignment
+# EnforcedStyle, so that cop is off; spacing-for-alignment stays allowed elsewhere.
+Layout/ExtraSpacing:
+  AllowForAlignment: true
+Layout/HashAlignment:
+  Enabled: false
+
+# Prefer explicit &block names over anonymous forwarding (clearer at call sites).
+Naming/BlockForwarding:
+  EnforcedStyle: explicit
+Style/ArgumentsForwarding:
+  Enabled: false
+
+# Dev dependencies are grouped by purpose, not alphabetised.
+Gemspec/OrderedDependencies:
+  Enabled: false
+
+# Trailing comments on one-line class defs document the error taxonomy (HTTP codes).
+Style/CommentedKeyword:
+  Enabled: false
+
+# `has_more?` mirrors the API's has_more field (cursor pagination), and validate! /
+# delete are not predicates — these naming cops are false positives here.
+Naming/PredicatePrefix:
+  Enabled: false
+Naming/PredicateMethod:
+  Enabled: false
+
+Layout/LineLength:
+  Max: 120
+
+# Keep braces on blocks that are part of a method chain (e.g. WebMock `.with { }`),
+# where do/end would break the chain.
+Style/BlockDelimiters:
+  EnforcedStyle: braces_for_chaining
+
+# --- Relax guidance-only cops for a hand-rolled client -------------------------
+
+# Method/class size is guidance here, not a gate.
+Metrics:
+  Enabled: false
+
+# Classes are documented in prose where it matters, not via a rigid format.
+Style/Documentation:
+  Enabled: false
+
+# This gem keeps its dev dependencies in the gemspec by choice.
+Gemspec/DevelopmentDependencies:
+  Enabled: false
