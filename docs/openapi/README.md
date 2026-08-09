@@ -10,6 +10,9 @@ and drop them in this directory (they are gitignored):
 
 | File | Spec | Version used during development |
 | --- | --- | --- |
-| `superpdp.json` | SUPER PDP API (`v1.beta`) | 1.24.0.beta |
-| `xp-z12-013-flow-1.2.0.json` | AFNOR Flow Service (XP Z12-013 interop) | 1.2.0 |
-| `xp-z12-013-directory-1.2.0.json` | AFNOR Directory Service (XP Z12-013 interop) | 1.2.0 |
+| `superpdp.json` | SUPER PDP API (`v1.beta`) | 1.30.0.beta |
+| `xp-z12-013-flow-1.3.0.json` | AFNOR Flow Service (XP Z12-013 interop) | 1.3.0 |
+| `xp-z12-013-directory-1.3.0.json` | AFNOR Directory Service (XP Z12-013 interop) | 1.3.0 |
+
+They are served unauthenticated from `https://api.superpdp.tech/openapi/<file>` (the file
+names come from the Scalar config inlined in `https://www.superpdp.tech/openapi`).

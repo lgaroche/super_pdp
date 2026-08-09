@@ -115,6 +115,33 @@ invoice.validate                       # => [] (structural checks; [] means OK)
 client.invoices.issue(invoice, external_id: "INV-2026-001")
 ```
 
+**Discounts and credit notes.** A line discount is an allowance (BG-27), not a lowered
+net — BT-131 is `quantity × unit price − allowances`, and the builder derives it for you.
+A remise globale is a document-level allowance (BG-20); because a VAT category is
+mandatory on each entry, one spanning several rates is split into one entry per rate:
+
+```ruby
+invoice.add_line(name: "Consulting", quantity: 10, unit_price: 100, vat_rate: 20,
+                 allowances: [{ amount: 150, percent: 15, base_amount: 1000, reason: "Remise" }])
+
+invoice.add_document_level_discount(amount: 30, reason: "Remise globale")  # split across rates
+invoice.add_document_level_allowance(amount: 30, vat_rate: 20)             # or one rate, explicit
+```
+
+`add_document_level_discount` allocates the split for you, in whole cents that sum back
+to the discount exactly. If you already compute per-rate shares yourself — especially if
+you store them and have shown the customer a VAT breakdown derived from them — emit each
+with `add_document_level_allowance` rather than letting the gem re-derive: proportional
+allocation depends on the rounding rule, and two defensible rules put the leftover cent
+on different rates.
+
+A credit note (avoir) is `type_code: 381` referencing the invoice it corrects (BG-3):
+
+```ruby
+credit = SuperPdp::Invoice.new(number: "AV-2026-001", type_code: 381, ...)
+credit.add_preceding_invoice_reference(reference: "INV-2026-001", type_code: 380)
+```
+
 `issue` raises `SuperPdp::InvalidInvoiceError` (carrying `#errors`) if the local
 structural checks fail, before any HTTP call. Those checks are deliberately shallow
 (required fields present, line nets and totals reconcile) — full EN 16931 conformance is
