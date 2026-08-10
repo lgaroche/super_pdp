@@ -135,6 +135,20 @@ with `add_document_level_allowance` rather than letting the gem re-derive: propo
 allocation depends on the rounding rule, and two defensible rules put the leftover cent
 on different rates.
 
+**French mandatory mentions.** Several are carried as invoice notes (BG-1) rather than in
+dedicated fields. `BR-FR-05` wants three, and `BT-30` must identify the seller as a legal
+entity — together they are the difference between a document the validator flags and one
+it passes cleanly:
+
+```ruby
+invoice.add_note(note: "Frais de recouvrement pour retard de paiement : 40 €", subject_code: "PMT")
+invoice.add_note(note: "Pénalités de retard : 3 × le taux d'intérêt légal",    subject_code: "PMD")
+invoice.add_note(note: "Escompte pour paiement anticipé : néant",              subject_code: "AAB")
+
+seller: { name: "Burger Queen", vat_identifier: "FR44732829320",
+          legal_registration_identifier: { scheme: "0002", value: "732829320" }, ... }
+```
+
 A credit note (avoir) is `type_code: 381` referencing the invoice it corrects (BG-3):
 
 ```ruby

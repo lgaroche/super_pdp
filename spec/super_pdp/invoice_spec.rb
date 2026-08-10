@@ -100,6 +100,34 @@ RSpec.describe SuperPdp::Invoice do
     end
   end
 
+  describe "#add_note" do
+    it "serializes BT-22 with its BT-21 subject code" do
+      invoice = build.add_line(name: "Consulting", quantity: 1, unit_price: 100, vat_rate: 20)
+      invoice.add_note(note: "Frais de recouvrement 40 EUR", subject_code: "PMT")
+      invoice.add_note(note: "Escompte pour paiement anticipé: néant", subject_code: "AAB")
+
+      expect(invoice.to_en_invoice["notes"]).to eq(
+        [{ "note" => "Frais de recouvrement 40 EUR", "subject_code" => "PMT" },
+         { "note" => "Escompte pour paiement anticipé: néant", "subject_code" => "AAB" }]
+      )
+    end
+
+    it "keeps the subject code optional and omits the group when there are no notes" do
+      invoice = build.add_line(name: "Consulting", quantity: 1, unit_price: 100, vat_rate: 20)
+      expect(invoice.to_en_invoice).not_to include("notes")
+
+      invoice.add_note(note: "Livraison en deux fois")
+      expect(invoice.to_en_invoice["notes"]).to eq([{ "note" => "Livraison en deux fois" }])
+    end
+
+    it "flags a note with no text — BT-22 is required" do
+      invoice = build.add_line(name: "Consulting", quantity: 1, unit_price: 100, vat_rate: 20)
+      invoice.add_note(note: "", subject_code: "PMT")
+
+      expect(invoice.validate).to include(a_string_matching(/note 1: note text is required/))
+    end
+  end
+
   describe "#add_preceding_invoice_reference" do
     it "serializes BT-25 / BT-26 and the French preceding type code" do
       invoice = build.add_line(name: "Consulting", quantity: 1, unit_price: 100, vat_rate: 20)
