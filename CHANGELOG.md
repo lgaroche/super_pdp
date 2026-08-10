@@ -6,6 +6,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Invoice notes (BG-1): `Invoice#add_note(note:, subject_code:)` fills BT-22 with an
+  optional BT-21 subject code from UNTDID 4451. French invoicing carries several
+  mandatory mentions this way rather than in dedicated fields — BR-FR-05 wants the frais
+  de recouvrement (`PMT`), late-payment penalties (`PMD`) and early-settlement discount
+  (`AAB`) mentions — so without it callers had to reach past `to_en_invoice` and mutate
+  the payload to comply. Verified against the sandbox validator: adding the three
+  mentions clears all three `BR-FR-05/BT-22` warnings.
+
 ## [0.2.0] - 2026-08-09
 
 ### Added

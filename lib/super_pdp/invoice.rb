@@ -38,7 +38,7 @@ module SuperPdp
                   :specification_identifier, :business_process_type,
                   :seller, :buyer, :payment_due_date, :payment_terms,
                   :buyer_reference, :purchase_order_reference
-    attr_reader :lines, :preceding_invoice_references, :document_level_allowances
+    attr_reader :lines, :notes, :preceding_invoice_references, :document_level_allowances
 
     def initialize(number:, issue_date:, seller:, buyer:,
                    currency_code: DEFAULT_CURRENCY, type_code: DEFAULT_TYPE_CODE,
@@ -58,8 +58,25 @@ module SuperPdp
       @buyer_reference = buyer_reference
       @purchase_order_reference = purchase_order_reference
       @lines = []
+      @notes = []
       @preceding_invoice_references = []
       @document_level_allowances = []
+    end
+
+    # Add a document-level note (BG-1) — free text about the invoice as a whole, with an
+    # optional subject code (BT-21) from UNTDID 4451 qualifying what the note is about.
+    #
+    # French invoicing requires several mentions to be carried this way rather than in a
+    # dedicated field: BR-FR-05 wants the frais de recouvrement mention (subject code
+    # `PMT`), and the penalty and discount-terms mentions travel the same route. Without
+    # this, callers have to reach past `to_en_invoice` and mutate the payload to comply.
+    #
+    #   invoice.add_note(note: "Frais de recouvrement 40 EUR", subject_code: "PMT")
+    #
+    # Returns self.
+    def add_note(note:, subject_code: nil)
+      @notes << { note: note, subject_code: subject_code }.compact
+      self
     end
 
     # Add an invoice line. `allowances` (BG-27) is a list of line-level discounts, each
@@ -234,6 +251,10 @@ module SuperPdp
         end
       end
 
+      notes.each_with_index do |entry, i|
+        errors << "note #{i + 1}: note text is required" if blank?(entry[:note])
+      end
+
       preceding_invoice_references.each_with_index do |ref, i|
         errors << "preceding invoice reference #{i + 1}: reference is required" if blank?(ref[:reference])
       end
@@ -265,6 +286,7 @@ module SuperPdp
         "seller"          => stringify(@seller),
         "buyer"           => stringify(@buyer),
         "lines"           => lines.map { |l| line_json(l) },
+        "notes"           => list_json(notes) { |n| note_json(n) },
         "vat_break_down"  => vat_breakdown.map { |b| vat_json(b) },
         "totals"          => totals_json(t),
         "preceding_invoice_references" =>
@@ -318,6 +340,14 @@ module SuperPdp
           "vat_exemption_reason_code" => allowance[:vat_exemption_reason_code]
         }.compact
       )
+    end
+
+    # BG-1: the note text is required, the subject code (BT-21) is not.
+    def note_json(entry)
+      {
+        "note"         => entry[:note],
+        "subject_code" => entry[:subject_code]
+      }.compact
     end
 
     def preceding_reference_json(ref)
