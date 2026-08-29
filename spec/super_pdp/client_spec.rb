@@ -57,6 +57,30 @@ RSpec.describe SuperPdp::Client do
       expect(invoice.id).to eq(99)
       expect(invoice).to be_outgoing
     end
+
+    it "passes the processing_rule assertion in the query" do
+      stub = stub_request(:post, "#{API}/invoices")
+             .with(query: { "external_id" => "INV-2", "processing_rule" => "B2C" },
+                   body: "<Invoice/>")
+             .to_return(status: 201, headers: { "Content-Type" => "application/json" },
+                        body: JSON.generate(id: 100, direction: "out", processing_rule: "B2C"))
+
+      client.invoices.create(content: "<Invoice/>", content_type: :xml,
+                             external_id: "INV-2", processing_rule: "B2C")
+      expect(stub).to have_been_requested
+    end
+  end
+
+  describe "#invoices.generate_test" do
+    it "requests a B2C sample when b2c: true" do
+      stub = stub_request(:get, "#{API}/invoices/generate_test_invoice")
+             .with(query: { "format" => "ubl", "b2c" => "true" })
+             .to_return(status: 200, headers: { "Content-Type" => "application/xml" },
+                        body: "<Invoice>B2C</Invoice>")
+
+      expect(client.invoices.generate_test(b2c: true)).to eq("<Invoice>B2C</Invoice>")
+      expect(stub).to have_been_requested
+    end
   end
 
   describe "#invoices.create multipart upload" do
@@ -115,6 +139,22 @@ RSpec.describe SuperPdp::Client do
       expect(convert).to have_been_requested
       expect(create).to have_been_requested
       expect(invoice.id).to eq(5)
+    end
+
+    it "forwards processing_rule to the create call" do
+      stub_request(:post, "#{API}/invoices/convert")
+        .with(query: { "from" => "en16931", "to" => "ubl" })
+        .to_return(status: 200, headers: { "Content-Type" => "application/xml" },
+                   body: "<Invoice>UBL</Invoice>")
+
+      create = stub_request(:post, "#{API}/invoices")
+               .with(query: { "external_id" => "INV-001", "processing_rule" => "B2C" },
+                     body: "<Invoice>UBL</Invoice>")
+               .to_return(status: 201, headers: { "Content-Type" => "application/json" },
+                          body: JSON.generate(id: 6, direction: "out"))
+
+      client.invoices.issue(sample_invoice, external_id: "INV-001", processing_rule: "B2C")
+      expect(create).to have_been_requested
     end
 
     it "embeds the invoice into a base PDF to produce Factur-X when pdf: is given" do
