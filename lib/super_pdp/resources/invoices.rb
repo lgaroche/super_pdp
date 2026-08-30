@@ -52,8 +52,9 @@ module SuperPdp
 
       # GET /v1.beta/invoices/generate_test_invoice -> a sample invoice (raw XML).
       # Handy in sandbox to obtain a valid payload to send back via #create.
-      def generate_test(format: "ubl")
-        connection.get("invoices/generate_test_invoice", { format: format })
+      # b2c: true generates a B2C sample (individual buyer, EM electronic address).
+      def generate_test(format: "ubl", b2c: nil)
+        connection.get("invoices/generate_test_invoice", { format: format, b2c: b2c })
       end
 
       # POST /v1.beta/invoices — issue (send) an invoice.
@@ -64,10 +65,14 @@ module SuperPdp
       #
       # external_id: your own reference, echoed back on the invoice.
       # disable_pre_check: skip SUPER PDP's synchronous pre-validation.
+      # processing_rule: assert the AFNOR processing rule ("B2B", "B2C", "B2BInt").
+      #   The server computes the rule from the payload either way and rejects the
+      #   request (400) when the assertion disagrees — a cheap misrouting guard.
       # multipart: send as multipart/form-data instead of a raw body.
       def create(file: nil, content: nil, content_type: nil, external_id: nil,
-                 disable_pre_check: nil, multipart: false)
-        params = { external_id: external_id, disable_pre_check: disable_pre_check }
+                 disable_pre_check: nil, processing_rule: nil, multipart: false)
+        params = { external_id: external_id, disable_pre_check: disable_pre_check,
+                   processing_rule: processing_rule }
 
         body =
           if multipart && file
@@ -135,17 +140,20 @@ module SuperPdp
       # InvalidInvoiceError before any HTTP call (pass false to skip). By default the
       # invoice is converted to UBL XML; pass `pdf:` to embed it into that base PDF and
       # send a Factur-X document instead. `to:` overrides the conversion target.
-      def issue(invoice, external_id: nil, disable_pre_check: nil, pdf: nil, to: nil, validate: true)
+      def issue(invoice, external_id: nil, disable_pre_check: nil, processing_rule: nil,
+                pdf: nil, to: nil, validate: true)
         if validate && invoice.respond_to?(:validate) && !(errors = invoice.validate).empty?
           raise InvalidInvoiceError, errors
         end
 
         if pdf
           rendered = convert(invoice: invoice, pdf: pdf, to: to || "factur-x")
-          create(content: rendered, content_type: :pdf, external_id: external_id, disable_pre_check: disable_pre_check)
+          create(content: rendered, content_type: :pdf, external_id: external_id,
+                 disable_pre_check: disable_pre_check, processing_rule: processing_rule)
         else
           xml = convert(invoice: invoice, to: to || :ubl)
-          create(content: xml, content_type: :xml, external_id: external_id, disable_pre_check: disable_pre_check)
+          create(content: xml, content_type: :xml, external_id: external_id,
+                 disable_pre_check: disable_pre_check, processing_rule: processing_rule)
         end
       end
 
