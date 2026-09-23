@@ -30,6 +30,7 @@ module SuperPdp
     DEFAULT_CURRENCY = "EUR"
     DEFAULT_UNIT_CODE = "C62"                              # UN/ECE Rec 20: one (piece)
     DEFAULT_VAT_CATEGORY = "S"                             # standard rate
+    SEPA_CREDIT_TRANSFER = "58"                            # UNTDID 4461 (BT-81)
 
     Line = Struct.new(:identifier, :name, :quantity, :unit_price, :net_amount,
                       :vat_rate, :vat_category, :unit_code, :allowances, keyword_init: true)
@@ -37,14 +38,18 @@ module SuperPdp
     attr_accessor :number, :issue_date, :currency_code, :type_code,
                   :specification_identifier, :business_process_type,
                   :seller, :buyer, :payment_due_date, :payment_terms,
-                  :buyer_reference, :purchase_order_reference
-    attr_reader :lines, :notes, :preceding_invoice_references, :document_level_allowances
+                  :buyer_reference, :purchase_order_reference,
+                  :payment_means_type_code, :payment_means_text, :remittance_information
+    attr_reader :lines, :notes, :preceding_invoice_references, :document_level_allowances,
+                :credit_transfers
 
     def initialize(number:, issue_date:, seller:, buyer:,
                    currency_code: DEFAULT_CURRENCY, type_code: DEFAULT_TYPE_CODE,
                    specification_identifier: DEFAULT_SPECIFICATION_IDENTIFIER,
                    business_process_type: nil, payment_due_date: nil, payment_terms: nil,
-                   buyer_reference: nil, purchase_order_reference: nil)
+                   buyer_reference: nil, purchase_order_reference: nil,
+                   payment_means_type_code: nil, payment_means_text: nil,
+                   remittance_information: nil)
       @number = number
       @issue_date = issue_date
       @seller = seller || {}
@@ -57,10 +62,14 @@ module SuperPdp
       @payment_terms = payment_terms
       @buyer_reference = buyer_reference
       @purchase_order_reference = purchase_order_reference
+      @payment_means_type_code = payment_means_type_code
+      @payment_means_text = payment_means_text
+      @remittance_information = remittance_information
       @lines = []
       @notes = []
       @preceding_invoice_references = []
       @document_level_allowances = []
+      @credit_transfers = []
     end
 
     # Add a document-level note (BG-1) — free text about the invoice as a whole, with an
@@ -76,6 +85,34 @@ module SuperPdp
     # Returns self.
     def add_note(note:, subject_code: nil)
       @notes << { note: note, subject_code: subject_code }.compact
+      self
+    end
+
+    # Add an account the buyer can pay into by transfer (BG-17), inside the payment
+    # instructions (BG-16).
+    #
+    #   invoice.add_credit_transfer(account_identifier: "FR7630006000011234567890189",
+    #                               account_name: "Burger Queen", service_provider_identifier: "AGRIFRPPXXX")
+    #
+    # `account_identifier` is BT-84 — an IBAN for a SEPA transfer. Leave `scheme` empty
+    # for one: the API writes BT-84 to CII's IBANID either way, and any non-empty scheme is
+    # *also* written out as a ProprietaryID holding that string, a second account
+    # identifier nobody meant to give (observed against the sandbox converter). BT-85 is
+    # the account's name, BT-86 the bank's identifier (a BIC).
+    #
+    # BR-49 wants a payment means code (BT-81) wherever BG-16 is present, so this sets
+    # `payment_means_type_code` to 58, SEPA credit transfer, unless one was given.
+    # `remittance_information` (BT-83) is the reference the buyer should quote on the
+    # transfer — commonly the invoice number. Returns self.
+    def add_credit_transfer(account_identifier:, account_name: nil, service_provider_identifier: nil,
+                            scheme: "")
+      @payment_means_type_code ||= SEPA_CREDIT_TRANSFER
+      @credit_transfers << {
+        account_identifier:          account_identifier,
+        scheme:                      scheme.to_s,
+        account_name:                account_name,
+        service_provider_identifier: service_provider_identifier
+      }.compact
       self
     end
 
@@ -264,6 +301,15 @@ module SuperPdp
 
         errors << "document-level allowance #{i + 1}: vat_category_code is required"
       end
+
+      if payment_instructions_json && blank?(payment_means_type_code)
+        errors << "payment_means_type_code is required with payment instructions"
+      end
+      credit_transfers.each_with_index do |transfer, i|
+        next unless blank?(transfer[:account_identifier])
+
+        errors << "credit transfer #{i + 1}: account_identifier is required"
+      end
       errors
     end
 
@@ -295,6 +341,7 @@ module SuperPdp
           list_json(document_level_allowances) { |a| document_allowance_json(a) },
         "payment_due_date"         => (iso_date(payment_due_date) if payment_due_date),
         "payment_terms"            => payment_terms,
+        "payment_instructions"     => payment_instructions_json,
         "buyer_reference"          => buyer_reference,
         "purchase_order_reference" => purchase_order_reference
       }.compact
@@ -350,6 +397,29 @@ module SuperPdp
       }.compact
     end
 
+    # BG-16, or nil when the invoice says nothing about how to pay — so an invoice
+    # without it serializes exactly as it did before. BT-81 is a string in the schema; an
+    # Integer code is accepted and converted.
+    def payment_instructions_json
+      json = {
+        "payment_means_type_code" => payment_means_type_code&.to_s,
+        "payment_means_text"      => payment_means_text,
+        "remittance_information"  => remittance_information,
+        "credit_transfers"        => list_json(credit_transfers) { |t| credit_transfer_json(t) }
+      }.compact
+      json unless json.empty?
+    end
+
+    # BG-17: BT-84 is required, and carries its scheme as the API's identifier object.
+    def credit_transfer_json(transfer)
+      {
+        "payment_account_identifier"          => { "scheme" => transfer[:scheme],
+                                                   "value"  => transfer[:account_identifier] },
+        "payment_account_name"                => transfer[:account_name],
+        "payment_service_provider_identifier" => transfer[:service_provider_identifier]
+      }.compact
+    end
+
     def preceding_reference_json(ref)
       {
         "reference"                   => ref[:reference],
@@ -363,7 +433,7 @@ module SuperPdp
         "vat_category_code"        => entry[:category],
         "vat_category_rate"        => num(entry[:rate]),
         "vat_category_taxable_amount" => money(entry[:taxable]),
-        "vat_category_tax_amount"  => money(entry[:tax])
+        "vat_category_tax_amount" => money(entry[:tax])
       }
     end
 

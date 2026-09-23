@@ -7,6 +7,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Payment instructions (BG-16): `Invoice#add_credit_transfer(account_identifier:,
+  account_name:, service_provider_identifier:)` adds a BG-17 account — IBAN (BT-84),
+  account name (BT-85), BIC (BT-86) — and the constructor takes `payment_means_type_code`
+  (BT-81), `payment_means_text` (BT-82) and `remittance_information` (BT-83). BR-49 wants
+  a means code wherever BG-16 is present, so adding a transfer defaults it to 58, SEPA
+  credit transfer. Leave `scheme` empty for an IBAN: the converter writes any non-empty
+  scheme to CII as an extra ProprietaryID. Verified against the sandbox validator: a 380
+  carrying an IBAN, name, BIC and invoice-number reference converts to CII (IBANID,
+  AccountName, BICID) and UBL, and both validate clean.
 - Invoice notes (BG-1): `Invoice#add_note(note:, subject_code:)` fills BT-22 with an
   optional BT-21 subject code from UNTDID 4451. French invoicing carries several
   mandatory mentions this way rather than in dedicated fields — BR-FR-05 wants the frais

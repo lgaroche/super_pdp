@@ -149,6 +149,19 @@ seller: { name: "Burger Queen", vat_identifier: "FR44732829320",
           legal_registration_identifier: { scheme: "0002", value: "732829320" }, ... }
 ```
 
+**Bank details.** Where the buyer pays goes in the payment instructions (BG-16), one
+BG-17 entry per account. Adding one defaults the means code (BT-81) to 58, SEPA credit
+transfer; the invoice number is the usual transfer reference (BT-83):
+
+```ruby
+invoice = SuperPdp::Invoice.new(..., remittance_information: "INV-2026-001")
+invoice.add_credit_transfer(account_identifier: "FR7630006000011234567890189",
+                            account_name: "Burger Queen", service_provider_identifier: "AGRIFRPPXXX")
+```
+
+Leave `scheme:` at its empty default for an IBAN — any other value also lands in the CII
+as a ProprietaryID.
+
 A credit note (avoir) is `type_code: 381` referencing the invoice it corrects (BG-3):
 
 ```ruby
