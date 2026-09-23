@@ -128,6 +128,59 @@ RSpec.describe SuperPdp::Invoice do
     end
   end
 
+  describe "#add_credit_transfer" do
+    let(:iban) { "FR7630006000011234567890189" }
+
+    it "serializes BG-16 with its BG-17 account" do
+      invoice = build(remittance_information: "INV-001")
+                .add_line(name: "Consulting", quantity: 1, unit_price: 100, vat_rate: 20)
+      invoice.add_credit_transfer(account_identifier: iban, account_name: "Burger Queen",
+                                  service_provider_identifier: "AGRIFRPPXXX")
+
+      expect(invoice.to_en_invoice["payment_instructions"]).to eq(
+        "payment_means_type_code" => "58",
+        "remittance_information"  => "INV-001",
+        "credit_transfers"        => [
+          { "payment_account_identifier"          => { "scheme" => "", "value" => iban },
+            "payment_account_name"                => "Burger Queen",
+            "payment_service_provider_identifier" => "AGRIFRPPXXX" }
+        ]
+      )
+    end
+
+    it "keeps a payment means code the caller chose, as the schema's string" do
+      invoice = build(payment_means_type_code: 30)
+                .add_line(name: "Consulting", quantity: 1, unit_price: 100, vat_rate: 20)
+      invoice.add_credit_transfer(account_identifier: iban)
+
+      instructions = invoice.to_en_invoice["payment_instructions"]
+      expect(instructions["payment_means_type_code"]).to eq("30")
+      expect(instructions["credit_transfers"]).to eq(
+        [{ "payment_account_identifier" => { "scheme" => "", "value" => iban } }]
+      )
+    end
+
+    it "omits the group when the invoice says nothing about how to pay" do
+      invoice = build.add_line(name: "Consulting", quantity: 1, unit_price: 100, vat_rate: 20)
+
+      expect(invoice.to_en_invoice).not_to include("payment_instructions")
+    end
+
+    it "flags a transfer with no account — BT-84 is required" do
+      invoice = build.add_line(name: "Consulting", quantity: 1, unit_price: 100, vat_rate: 20)
+      invoice.add_credit_transfer(account_identifier: "")
+
+      expect(invoice.validate).to include(a_string_matching(/credit transfer 1: account_identifier is required/))
+    end
+
+    it "flags payment instructions with no means code — BR-49" do
+      invoice = build(remittance_information: "INV-001")
+                .add_line(name: "Consulting", quantity: 1, unit_price: 100, vat_rate: 20)
+
+      expect(invoice.validate).to include(a_string_matching(/payment_means_type_code is required/))
+    end
+  end
+
   describe "#add_preceding_invoice_reference" do
     it "serializes BT-25 / BT-26 and the French preceding type code" do
       invoice = build.add_line(name: "Consulting", quantity: 1, unit_price: 100, vat_rate: 20)
